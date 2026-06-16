@@ -1,4 +1,20 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <dwsync>
-<file name="database.php" server="puskesmascilincing.id//public_html/e-survey/" local="132365165896091810" remote="132365166000000000" Dst="0" />
+<file name="autoload.php" server="teknikjayaelektro.com//public_html/ekin/" local="132261248208360254" remote="131809860000000000" Dst="0" />
+<file name="config.php" server="teknikjayaelektro.com//public_html/ekin/" local="132261248210088165" remote="131809860000000000" Dst="0" />
+<file name="autoload.php.zip" server="teknikjayaelektro.com//public_html/ekin/" local="132261248210746135" remote="131809860000000000" Dst="0" />
+<file name="constants.php" server="teknikjayaelektro.com//public_html/ekin/" local="132261248211215147" remote="131809860000000000" Dst="0" />
+<file name="beli.php" server="teknikjayaelektro.com//public_html/ekin/" local="132261248211234848" remote="131809860000000000" Dst="0" />
+<file name="database.php" server="teknikjayaelektro.com//public_html/ekin/" local="132261248211524395" remote="132253658400000000" Dst="0" />
+<file name="doctypes.php" server="teknikjayaelektro.com//public_html/ekin/" local="132261248213342468" remote="131809860000000000" Dst="0" />
+<file name="foreign_chars.php" server="teknikjayaelektro.com//public_html/ekin/" local="132261248213352437" remote="131809860000000000" Dst="0" />
+<file name="hooks.php" server="teknikjayaelektro.com//public_html/ekin/" local="132261248213372387" remote="131809860000000000" Dst="0" />
+<file name="memcached.php" server="teknikjayaelektro.com//public_html/ekin/" local="132261248214077694" remote="131809860000000000" Dst="0" />
+<file name="index.html" server="teknikjayaelektro.com//public_html/ekin/" local="132261248214160833" remote="131809860000000000" Dst="0" />
+<file name="mimes.php" server="teknikjayaelektro.com//public_html/ekin/" local="132261248214629568" remote="131809860000000000" Dst="0" />
+<file name="profiler.php" server="teknikjayaelektro.com//public_html/ekin/" local="132261248214908823" remote="131809860000000000" Dst="0" />
+<file name="routes.php" server="teknikjayaelektro.com//public_html/ekin/" local="132261248215938406" remote="131988708000000000" Dst="0" />
+<file name="migration.php" server="teknikjayaelektro.com//public_html/ekin/" local="132261248216197715" remote="131809860000000000" Dst="0" />
+<file name="user_agents.php" server="teknikjayaelektro.com//public_html/ekin/" local="132261248217639173" remote="131809860000000000" Dst="0" />
+<file name="smileys.php" server="teknikjayaelektro.com//public_html/ekin/" local="132261248217659128" remote="131809860000000000" Dst="0" />
 </dwsync>

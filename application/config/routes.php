@@ -1,6 +1,5 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
-
 /*
 | -------------------------------------------------------------------------
 | URI ROUTING
@@ -19,7 +18,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 |
 | Please see the user guide for complete details:
 |
-|	https://codeigniter.com/userguide3/general/routing.html
+|	https://codeigniter.com/user_guide/general/routing.html
 |
 | -------------------------------------------------------------------------
 | RESERVED ROUTES
@@ -28,6 +27,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 | There are three reserved routes:
 |
 |	$route['default_controller'] = 'welcome';
+	
 |
 | This route indicates which controller class should be loaded if the
 | URI contains no data. In the above example, the "welcome" class
@@ -49,12 +49,9 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 | Examples:	my-controller/index	-> my_controller/index
 |		my-controller/my-method	-> my_controller/my_method
 */
-$route['default_controller'] = 'auth/login_form';
+//$route['default_controller'] = 'Login/index';
+$route['default_controller'] = 'auth/login';
+$route['reset_password'] = 'auth/reset_password';
+$route['login'] = 'auth/login';
 $route['404_override'] = '';
 $route['translate_uri_dashes'] = FALSE;
-$route['detail_permintaan/(:num)'] = 'Permintaan_barang/detail/$1';
-$route['edit_barang_permintaan/(:num)'] = 'Permintaan_barang/edit_list_barang/$1';
-$route['delete_list_barang/(:num)/(:num)'] = 'Permintaan_barang/delete_list_barang/$1/$2';
-$route['update_permintaan_barang/(:num)'] = 'Permintaan_barang/update_daftar_barang/$1';
-
-
