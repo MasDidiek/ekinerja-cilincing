@@ -13,11 +13,21 @@ define('PATH_IMAGE', 'https://puskesmascilincing.jakarta.go.id/asset/material/im
 
 define('CSS_PATH', base_url() . 'assets/tabler/dist/css/');
 define('DIST_PATH', base_url() . 'assets/tabler/dist/');
-define('KAPUS','Raden Achmad Sigit Mustika Adi / 196801242007011020');
-define('KTU','Muklatul Ainiah / 197003071990022001');
+define('NAMA_KAPUS','dr. Raden Achmad Sigit Mustika Adi');
+define('NIP_KAPUS','196801242007011020');
 
 
 
+
+define("EKIN_URL", 'https://ekinerja-puskesmascilincing.jakarta.go.id/');
+
+define('SPJ', base_url() . 'spj/');
+define('EKIN', base_url() . '');
+define('PENILAIAN_KINERJA', base_url() . 'admin/penilaian_kinerja/');
+define('DATA_PEGAWAI', base_url() . 'admin/data_pegawai/');
+define('ADMIN_EKIN', EKIN_URL . 'admin/');
+define('SERAPAN', 20.00);
+define('API_ABSEN', 'http://puskesmascilincing.id/e-absensi/masteradmin/absensi/');
 
 $SERVER_NAME =  $_SERVER['SERVER_NAME'];
 
@@ -31,120 +41,201 @@ if (strpos($SERVER_NAME, '10.15.39.96') !== false) {
 }
 
 
+if (!function_exists('str_contains')) {
+    function str_contains($haystack, $needle) {
+        return strpos($haystack, $needle) !== false;
+    }
+}
 
-// Fungsi untuk mengubah byte menjadi format MB/KB
-function formatSizeUnits($bytes) {
-	if ($bytes >= 1073741824) {
-		$bytes = number_format($bytes / 1073741824, 2) . ' GB';
-	} elseif ($bytes >= 1048576) {
-		$bytes = number_format($bytes / 1048576, 2) . ' MB';
-	} elseif ($bytes >= 1024) {
-		$bytes = number_format($bytes / 1024, 2) . ' KB';
-	} elseif ($bytes > 1) {
-		$bytes = $bytes . ' bytes';
-	} elseif ($bytes == 1) {
-		$bytes = $bytes . ' byte';
-	} else {
-		$bytes = '0 bytes';
-	}
+function labelRoleApproval($role)
+{
+    switch ($role) {
+        case 'pengganti': return 'Menunggu ACC Pengganti';
+        case 'kapustu':   return 'Menunggu ACC Kapustu';
+        case 'ktu':       return 'Menunggu ACC KTU';
+        case 'kapus':     return 'Menunggu ACC Kapus Induk';
+        default:          return null;
+    }
+}
 
-	return $bytes;
+
+function convertPinMesin($pin)
+{
+    $pin = (string)$pin;
+
+    if (!empty($pin) && $pin[0] == '0') {
+        return '1' . $pin;
+    }
+
+    return $pin;
+}
+
+function normalizeNumber($val){
+    if($val == '' || $val == null) return 0;
+
+    $val = str_replace('.', '', $val); // remove thousand separator
+    $val = str_replace(',', '', $val); // convert decimal
+
+   // return (int) round($val);
+
+   return $val;
+}
+
+function bulanAngka($bulan){
+    $arr = [
+        'Januari'=>1,'Februari'=>2,'Maret'=>3,'April'=>4,
+        'Mei'=>5,'Juni'=>6,'Juli'=>7,'Agustus'=>8,
+        'September'=>9,'Oktober'=>10,'November'=>11,'Desember'=>12
+    ];
+    return $arr[trim($bulan)];
+}
+
+function getHariKerjaPegawai($tgl_masuk, $bulan, $tahun)
+{
+    $awal_bulan = $tahun . '-' . $bulan . '-01';
+    $akhir_bulan = date('Y-m-t', strtotime($awal_bulan));
+
+    // tentukan tanggal mulai hitung
+    if ($tgl_masuk > $awal_bulan) {
+        $tgl_mulai = $tgl_masuk;
+        $pegawai_baru = true;
+    } else {
+        $tgl_mulai = $awal_bulan;
+        $pegawai_baru = false;
+    }
+
+    $hari_kerja = hitungHariKerja($tgl_mulai, $akhir_bulan);
+    $hari_kerja_full = hitungHariKerja($awal_bulan, $akhir_bulan);
+
+    return [
+        'pegawai_baru' => $pegawai_baru,
+        'hari_kerja' => $hari_kerja,
+        'hari_kerja_full' => $hari_kerja_full
+    ];
+}
+
+function hitungHariKerja($tgl_mulai, $tgl_akhir)
+{
+    $start = new DateTime($tgl_mulai);
+    $end = new DateTime($tgl_akhir);
+
+    $end->modify('+1 day');
+
+    $interval = new DateInterval('P1D');
+    $period = new DatePeriod($start, $interval, $end);
+
+    $hari_kerja = 0;
+
+    foreach ($period as $date) {
+        $hari = $date->format('N'); // 1 = Senin, 7 = Minggu
+
+        if ($hari < 6) { 
+            $hari_kerja++;
+        }
+    }
+
+    return $hari_kerja;
+}
+
+function hitung_hari_cuti_bulanan($tglMulai, $tglSelesai, $bulan, $tahun)
+{
+    $mulaiCuti   = new DateTime($tglMulai);
+    $selesaiCuti = new DateTime($tglSelesai);
+
+    $awalBulan  = new DateTime("$tahun-$bulan-01");
+    $akhirBulan = new DateTime($awalBulan->format('Y-m-t'));
+
+    $awalHitung  = max($mulaiCuti, $awalBulan);
+    $akhirHitung = min($selesaiCuti, $akhirBulan);
+
+    if ($awalHitung <= $akhirHitung) {
+        return $awalHitung->diff($akhirHitung)->days + 1;
+    }
+
+    return 0;
+}
+
+
+function persen_cuti_bulanan($tglMulai, $tglSelesai, $bulan, $tahun)
+{
+    $hariCuti = hitung_hari_cuti_bulanan($tglMulai, $tglSelesai, $bulan, $tahun);
+
+    $totalHari = cal_days_in_month(CAL_GREGORIAN, $bulan, $tahun);
+
+    if($totalHari == 0){
+        return 0;
+    }
+
+    return ($hariCuti / $totalHari) * 100;
+}
+
+
+function statusStyle($status)
+{
+    if($status=='approved'){
+        return ['icon'=>'mdi-check','bg'=>'bg-success-lighten','text'=>'text-success','label'=>'Disetujui'];
+    }
+    if($status=='rejected'){
+        return ['icon'=>'mdi-close','bg'=>'bg-danger-lighten','text'=>'text-danger','label'=>'Ditolak'];
+    }
+    if($status=='pending'){
+        return ['icon'=>'mdi-clock','bg'=>'bg-warning-lighten','text'=>'text-warning','label'=>'Menunggu Persetujuan'];
+    }
+    return ['icon'=>'mdi-timer-sand','bg'=>'bg-secondary-lighten','text'=>'text-muted','label'=>'Menunggu giliran'];
+}
+
+
+function timeAgo($datetime, $full = false)
+{
+    $now  = new DateTime;
+    $ago  = new DateTime($datetime);
+    $diff = $now->diff($ago);
+
+    // Hitung total detik
+    $seconds = (new DateTime())->getTimestamp() - $ago->getTimestamp();
+
+    if ($seconds < 60) {
+        return "baru saja";
+    } elseif ($seconds < 3600) {
+        $minutes = floor($seconds / 60);
+        return $minutes . " menit yang lalu";
+    } elseif ($seconds < 86400) {
+        $hours = floor($seconds / 3600);
+        return $hours . " jam yang lalu";
+    } else {
+        return $ago->format('Y-m-d H:i'); // bisa ubah format sesuai kebutuhan
+    }
 }
 
 
 
-function tahunText($tanggal){
-	$tahun = date('Y', strtotime($tanggal));
+function generateRandomString($length = 10) {
+    // Define the characters that can be used in the random string
+    $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    $charactersLength = strlen($characters);
+    $randomString = '';
 
-	$thn =  substr($tahun,2);
+    // Loop to generate random characters and append to the string
+    for ($i = 0; $i < $length; $i++) {
+        $randomString .= $characters[rand(0, $charactersLength - 1)];
+    }
 
-	$txtThn = tanggalText($thn);
-
-	$textTahun = 'Dua Ribu '.$txtThn;
-	return $textTahun;
-}
-
-
-function tanggalText($tgl){
-	
-
-	if($tgl < 10){
-		$tgl = createTextTgl($tgl);
-
-	}else if($tgl==10){
-		$tgl = 'Sepuluh';
-	}else if($tgl==11){
-		$tgl = 'Sebelas';
-	}else if($tgl > 11 && $tgl < 20){
-	
-		$d =  substr($tgl,1);
-		$tgl_awal = createTextTgl($d);
-		$tgl = $tgl_awal.' Belas';
-	}else if($tgl==20){
-		$tgl = 'Dua Puluh';
-	}else if($tgl > 20 && $tgl < 30){
-		$d =  substr($tgl,1);
-
-		$tgl_akhir = createTextTgl($d);
-		$tgl = 'Dua Puluh '.$tgl_akhir;
-	}else if($tgl == 30){
-		$tgl = 'Tiga Puluh';
-	}else{
-		$tgl = 'Tiga Puluh Satu';
-	}
-
-
-	return $tgl;
-	
-}
-
-function createTextTgl($tgl){
-	switch ($tgl) {
-		case 1:
-			$tgl_text = 'Satu';
-			break;
-		case 2:
-			$tgl_text = 'Dua';
-			break;
-		case 3:
-			$tgl_text = 'Tiga';
-			break;
-		case 4:
-			$tgl_text = 'Empat';
-			break;
-		case 5:
-			$tgl_text = 'Lima';
-			break;
-		case 6:
-			$tgl_text = 'Enam';
-			break;
-		case 7:
-			$tgl_text = 'Tujuh';
-			break;
-		case 8:
-			$tgl_text = 'Delapan';
-			break;
-		case 9:
-			default:
-			$tgl_text = 'Sepuluh';
-			break;
-
-		}
-
-		return $tgl_text;
+    return $randomString;
 }
 
 
 
-function formatTanggalIndo($date){
+function formatTanggalIndo($date)
+{
 	$tgl = date('d', strtotime($date));
 	$bln = date('m', strtotime($date));
 	$thn = date('Y', strtotime($date));
 
 	$bulan  = getBulan($bln);
-	$new_date =  $tgl.' '.$bulan.' '.$thn;
+	$new_date =  $tgl . ' ' . $bulan . ' ' . $thn;
 	return $new_date;
 }
+
 
 function getFileType($fileUploadName)
 {
@@ -153,6 +244,135 @@ function getFileType($fileUploadName)
 	return $format;
 }
 
+function resizeImage($file, $width, $height, $outputFile)
+{
+	list($originalWidth, $originalHeight, $imageType) = getimagesize($file);
+
+	$src = imagecreatefromstring(file_get_contents($file));
+
+	$dst = imagecreatetruecolor($width, $height);
+
+	// Preserve transparency for PNG and GIF images
+	if ($imageType == IMAGETYPE_PNG || $imageType == IMAGETYPE_GIF) {
+		imagecolortransparent($dst, imagecolorallocatealpha($dst, 0, 0, 0, 127));
+		imagealphablending($dst, false);
+		imagesavealpha($dst, true);
+	}
+
+	imagecopyresampled($dst, $src, 0, 0, 0, 0, $width, $height, $originalWidth, $originalHeight);
+
+	switch ($imageType) {
+		case IMAGETYPE_JPEG:
+			imagejpeg($dst, $outputFile);
+			break;
+		case IMAGETYPE_PNG:
+			imagepng($dst, $outputFile);
+			break;
+		case IMAGETYPE_GIF:
+			imagegif($dst, $outputFile);
+			break;
+		default:
+			throw new Exception('Unsupported image type');
+	}
+
+	imagedestroy($src);
+	imagedestroy($dst);
+}
+
+
+function hitungTelat($jam_masuk, $jam_absen)
+{
+	$telat = 0;
+
+
+	$explod_a   = explode(":", $jam_masuk);
+	$jam_a  	= @$explod_a[0];
+	$menit_a    = @$explod_a[1];
+
+	if ($jam_a == '-') {
+		$jam_a  	= 0;
+		$menit_a    = 0;
+	}
+
+
+	$explod     = explode(":", $jam_absen);
+	$jam  	    = $explod[0];
+	$menit      = $explod[1];
+
+
+	if ($jam == $jam_a) {
+
+		if ($menit  > $menit_a) {
+			$selihMenit  = $menit - $menit_a;
+			$telat = $selihMenit;
+		} else {
+			$telat = 0;
+		}
+	} else if ($jam > $jam_a) {
+
+
+		$selihAjam  = $jam - $jam_a;
+		$selihMenit  = $menit - $menit_a;
+
+		$telat =  ($selihAjam * 60) + $selihMenit;
+	} else {
+
+
+		$telat = 0;
+	}
+
+
+
+	return $telat;
+}
+
+function getNoBulan($nama_bulan){
+
+	switch ($nama_bulan) {
+		case "Januari":
+			$no_bulan = 1;
+			break;
+		case "Februari":
+			$no_bulan = 2;
+			break;
+		case "Maret":
+			$no_bulan = 3;
+			break;
+		case "April":
+			$no_bulan = 4;
+			break;
+		case "Mei":
+			$no_bulan = 5;
+			break;
+		case "Juni":
+			$no_bulan = 6;
+			break;
+		case "Juli":
+			$no_bulan = 7;
+			break;
+		case "Agustus":
+			$no_bulan = 8;
+			break;
+		case "September":
+			$no_bulan = 9;
+			break;
+		case "Oktober ":
+			$no_bulan = 10;
+			break;
+
+		case "November":
+			$no_bulan = 11;
+			break;
+		case "Desember":
+			$no_bulan = 12;
+			break;
+		default:
+			$no_bulan = "No information available for that day.";
+			break;
+	}
+
+	return $no_bulan;
+}
 
 function getNamahari($tgl)
 {
@@ -211,6 +431,163 @@ function getEndDate($bulan, $tahun)
 
 
 
+
+function hitungPulangCepat($jam_pulang, $jam_absen)
+{
+	$pc = 0;
+
+	$jam_pulang   = trim($jam_pulang);
+	$explod_a     = explode(":", $jam_pulang);
+	$jam_a  	    = $explod_a[0];
+	$menit_a      = @$explod_a[1];
+
+
+	$diff_menit = 0;
+
+
+	if ($jam_pulang <> '00:00:00') {
+
+		$explod     = explode(":", $jam_absen);
+		$jam  	    = @$explod[0];
+		$menit      = @$explod[1];
+
+		if ($jam_absen == '-') {
+			$pc = 150;
+		} else {
+			if ($jam < $jam_a) {
+				$defMenit = 60 - $menit;
+				if ($menit_a == '30') {
+
+					$pc = $defMenit + 30;
+				} else {
+
+					$selihAjam  = $jam_a - $jam;
+					if ($selihAjam == 1) {
+						$pc = $defMenit;
+					} else {
+						$adding = ($selihAjam - 1) * 60;
+						$pc = $adding + $diff_menit;
+					}
+				}
+			} else if ($jam == $jam_a) {
+
+				if ($menit_a == '30') {
+					if ($menit >= $menit_a) {
+						$pc = 0;
+					} else {
+						$pc = $menit_a - $menit;
+					}
+				} else {
+					$pc = 0;
+				}
+			} else {
+				$pc = 0;
+			}
+		}
+	} else {
+		$pc = 0;
+	}
+
+
+
+	return $pc;
+}
+
+function createTempImageName($imageName, $file_name){
+	$newImageName = $imageName . '_temp.' .substr($_FILES[$file_name]['name'], strrpos($_FILES[$file_name]['name'], '.') + 1);
+	return $newImageName;
+}
+
+function createImageName($imageName, $file_name){
+	$newImageName = $imageName . '.' .substr($_FILES[$file_name]['name'], strrpos($_FILES[$file_name]['name'], '.') + 1);
+	return $newImageName;
+}
+
+
+function resize_and_crop($original_image_url, $thumb_image_url, $thumb_w, $thumb_h, $quality = 75)
+{
+	// ACQUIRE THE ORIGINAL IMAGE: http://php.net/manual/en/function.imagecreatefromjpeg.php
+	$original = imagecreatefromjpeg($original_image_url);
+	if (!$original) return FALSE;
+
+	// GET ORIGINAL IMAGE DIMENSIONS
+	list($original_w, $original_h) = getimagesize($original_image_url);
+
+	// RESIZE IMAGE AND PRESERVE PROPORTIONS
+	$thumb_w_resize = $thumb_w;
+	$thumb_h_resize = $thumb_h;
+	if ($original_w > $original_h) {
+		$thumb_h_ratio  = $thumb_h / $original_h;
+		$thumb_w_resize = (int)round($original_w * $thumb_h_ratio);
+	} else {
+		$thumb_w_ratio  = $thumb_w / $original_w;
+		$thumb_h_resize = (int)round($original_h * $thumb_w_ratio);
+	}
+	if ($thumb_w_resize < $thumb_w) {
+		$thumb_h_ratio  = $thumb_w / $thumb_w_resize;
+		$thumb_h_resize = (int)round($thumb_h * $thumb_h_ratio);
+		$thumb_w_resize = $thumb_w;
+	}
+
+	// CREATE THE PROPORTIONAL IMAGE RESOURCE
+	$thumb = imagecreatetruecolor($thumb_w_resize, $thumb_h_resize);
+	if (!imagecopyresampled($thumb, $original, 0, 0, 0, 0, $thumb_w_resize, $thumb_h_resize, $original_w, $original_h)) return FALSE;
+
+	// ACTIVATE THIS TO STORE THE INTERMEDIATE IMAGE
+	// imagejpeg($thumb, 'RAY_temp_' . $thumb_w_resize . 'x' . $thumb_h_resize . '.jpg', 100);
+
+	// CREATE THE CENTERED CROPPED IMAGE TO THE SPECIFIED DIMENSIONS
+	$final = imagecreatetruecolor($thumb_w, $thumb_h);
+
+	$thumb_w_offset = 0;
+	$thumb_h_offset = 0;
+	if ($thumb_w < $thumb_w_resize) {
+		$thumb_w_offset = (int)round(($thumb_w_resize - $thumb_w) / 2);
+	} else {
+		$thumb_h_offset = (int)round(($thumb_h_resize - $thumb_h) / 2);
+	}
+
+	if (!imagecopy($final, $thumb, 0, 0, $thumb_w_offset, $thumb_h_offset, $thumb_w_resize, $thumb_h_resize)) return FALSE;
+
+	// STORE THE FINAL IMAGE - WILL OVERWRITE $thumb_image_url
+	if (!imagejpeg($final, $thumb_image_url, $quality)) return FALSE;
+	return TRUE;
+}
+
+
+function getNomorBulan($namaBulan) {
+	$namaBulan = trim($namaBulan); // Convert to lowercase for case-insensitive comparison
+    switch (strtolower($namaBulan)) {
+        case 'januari':
+            return 1;
+        case 'februari':
+            return 2;
+        case 'maret':
+            return 3;
+        case 'april':
+            return 4;
+        case 'mei':
+            return 5;
+        case 'juni':
+            return 6;
+        case 'juli':
+            return 7;
+        case 'agustus':
+            return 8;
+        case 'september':
+            return 9;
+        case 'oktober':
+            return 10;
+        case 'november':
+            return 11;
+        case 'desember':
+            return 12;
+        default:
+            return "Bulan tidak valid";
+    }
+}
+
+
 function lowerCase($string)
 {
 	$new_string = strtolower($string);
@@ -228,11 +605,96 @@ function upperCase($string)
 
 
 
+if (!function_exists('getJamKerjaShift')) {
+	function getJamKerjaShift($shift_name)
+	{
 
-function jenis_pegawai()
+		switch ($shift_name) {
+			case "OFF":
+				$jam_kerja = "-";
+				break;
+			case "P":
+				$jam_kerja = "07:30:00 - 14:00:00";
+				break;
+			case "S":
+				$jam_kerja = "14:00:00 - 21:00:00";
+				break;
+			case "PS":
+				$jam_kerja = "07:30:00 - 21:00:00";
+				break;
+			case "SM":
+				$jam_kerja = "14:00:00 - 00:00:00";
+				break;
+			case "SM-L":
+				$jam_kerja = "00:01:00 - 07:30:00";
+				break;
+			case "M":
+				$jam_kerja = "21:00:00 - 00:00:00";
+				break;
+			case "M-L":
+				$jam_kerja = "00:01:00 - 07:30:00";
+				break;
+			case "PSM":
+				$jam_kerja = "07:30:00 - 00:00:00";
+				break;
+			case "PSM-L":
+				$jam_kerja = "00:01:00 - 07:30:00";
+				break;
+			case "REG":
+				$jam_kerja = "07:30:00 - 15:00:00";
+				break;
+			case "REG-JUM":
+				$jam_kerja = "07:30:00 - 15:30:00";
+				break;
+			default:
+				$jam_kerja = "-";
+				break;
+		}
+
+		return $jam_kerja;
+	}
+}
+
+
+
+function cekShift($shiftName)
 {
-	$arrayJnsPegawai = array('PNS', 'NON PNS', 'PPPK', 'PPPK PW', 'ISHIP', 'PJLP',  'Lainnya');
-	return $arrayJnsPegawai;
+	if ($shiftName == 'OFF' || $shiftName == 'SM-OUT' || $shiftName == 'PSM-OUT' || $shiftName == 'M-OUT') {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+
+
+function cekShiftMasuk($shiftName)
+{
+	if ($shiftName == 'OFF' || $shiftName == 'SM-IN' || $shiftName == 'PSM-IN' || $shiftName == 'M-IN') {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+
+
+function cekAbsenMasuk($absen)
+{
+	if ($absen == 'IZIN' || $absen == 'CUTI' || $absen == 'DL-AWAL' || $absen == 'SAKIT' || $absen == 'DL_PENUH' || $absen == 'LIBUR NASIONAL' || $absen == 'ISOLASI MANDIRI' || $absen == 'PDP - POSITIF') {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+function cekAbsenKeluar($absen)
+{
+	if ($absen == 'IZIN' || $absen == 'CUTI' || $absen == 'DL-AKHIR' || $absen == 'SAKIT' || $absen == 'DL_PENUH' || $absen == 'LIBUR NASIONAL' || $absen == 'ISOLASI MANDIRI' || $absen == 'PDP - POSITIF') {
+		return true;
+	} else {
+		return false;
+	}
 }
 
 
@@ -268,8 +730,91 @@ function calculateMinutesDifference($jam_mulai, $jam_selesai) {
     return $total_minutes;
 }
 
+function hitungHariCuti($start_date, $end_date){
+	$listhariCuti = array();
+	$datetime1     = date_create($start_date);
+	$datetime2     = date_create($end_date);
+	// Calculates the difference between DateTime objects
+	$interval      = date_diff($datetime1, $datetime2);
+	$hariCuti      = $interval->format('%a')+1;
+	$newDate       = $start_date;
+
+	for($a=0; $a < $hariCuti; $a++){
+
+		$listhariCuti[] = $newDate;
+		$newDate = addDaysToDate($newDate, 1);
+
+	}
+
+	return array($hariCuti, $listhariCuti);
+}
 
 
+function hitungJamKerja($IN, $OUT)
+{
+	$to_time 	= strtotime($OUT);
+	$from_time  = strtotime($IN);
+	$MenitKerja = round(abs($to_time - $from_time) / 60);
+	$jamKerja   = round($MenitKerja / 60);
+
+	return $jamKerja;
+}
+
+
+function getMasaKerja($tahun, $bulan){
+	if ($tahun  < 2) {
+		$masa_kerja =  '0 - 2 Tahun';
+	} else if ($tahun >= 2 && $tahun < 4) {
+		$masa_kerja =  '2 - 4 Tahun';
+	} else if ($tahun >= 4 && $tahun < 6) {
+		$masa_kerja =  '4 - 6 Tahun';
+	} else if ($tahun >= 6 && $tahun < 8) {
+		$masa_kerja =  '6 - 8 Tahun';
+	} else if ($tahun >= 8 && $tahun < 10) {
+		$masa_kerja =  '8 - 10 Tahun';
+	} else if ($tahun >= 10 && $tahun < 12) {
+		$masa_kerja =  '10 - 12 Tahun';
+	} else if ($tahun >= 12 && $tahun < 14) {
+		$masa_kerja =  '12 - 14 Tahun';
+	} else if ($tahun >= 14 && $tahun < 16) {
+		$masa_kerja =  '14 - 16 Tahun';
+	} else if ($tahun >= 16 && $tahun < 18) {
+		$masa_kerja =  '16 - 18 Tahun';
+	} else {
+		$masa_kerja =  '18 - 20 Tahun';
+	}
+
+	return $masa_kerja;
+}
+
+
+function getIdMasaKerja($tahun, $bulan)
+{
+
+	if ($tahun <  2) {
+		$id = 1;
+	} else if ($tahun >= 2 && $tahun < 4) {
+		$id = 2;
+	} else if ($tahun >= 4 && $tahun < 6) {
+		$id = 3;
+	} else if ($tahun >= 6 && $tahun < 8) {
+		$id = 4;
+	} else if ($tahun >= 8 && $tahun < 10) {
+		$id = 6;
+	} else if ($tahun >= 10 && $tahun < 12) {
+		$id = 7;
+	} else if ($tahun >= 12 && $tahun < 14) {
+		$id = 8;
+	} else if ($tahun >= 14 && $tahun < 16) {
+		$id = 9;
+	} else if ($tahun >= 16 && $tahun < 18) {
+		$id = 10;
+	} else {
+		$id = 11;
+	}
+
+	return $id;
+}
 function get_array($arr)
 {
 	echo '<pre>';
@@ -411,49 +956,30 @@ if (!function_exists('add_date')) {
 	}
 }
 
-if (!function_exists('getTglTugas')) {
-	function getTglTugas($tanggal_dari, $tanggal_sampai)
+
+#untuk ngecek apakah jam absen itu termasuk absen masuk atau absen pulang
+if (!function_exists('cekStatusAbsen')) {
+	function cekStatusAbsen($jam_absen)
 	{
+		$status = 0;
+		$pecah = explode(":", $jam_absen);
+		$jam   = $pecah[0];
+
+
+		
+		//klo absen nya kurang dari jam 10 maka dianggap absen masuk
+		if($jam < 10){
+			$status = 0;
+		}
+
+		if($jam > 14){
+			$status = 1;
+		}
+
 	
-			$m1 = date('m', strtotime($tanggal_dari));
-			$m2 = date('m', strtotime($tanggal_sampai));
-
-			$d1 = date('d', strtotime($tanggal_dari));
-			$d2 = date('d', strtotime($tanggal_sampai));
-
-			$y1 = date('Y', strtotime($tanggal_dari));
-
-			$bulan  = getBulan($m1);
-
-
-			if($m1==$m2){
-			  $tanggal_tugas = $d1.' - '.$d2.' '.$bulan.' '.$y1;
-			}else{
-			  $tanggal_tugas = format_view($tanggal_dari).' s/d '.format_view($tanggal_sampai);
-			}
-
-
-		return $tanggal_tugas;
+		return $status;
 	}
 }
-
-
-if (!function_exists('getHariTugas')) {
-	function getHariTugas($tanggal_dari, $tanggal_sampai)
-	{
-	
-		$hari1 = format_hari($tanggal_dari);
-		$hari2 = format_hari($tanggal_sampai);
-
-		$hari_tugas = $hari1.' - '.$hari2;
-
-
-		return $hari_tugas;
-	}
-}
-
-
-
 
 
 
@@ -464,6 +990,85 @@ if (!function_exists('reduce_date')) {
 		$newDate  = date('Y-m-d', $plus2);
 		return $newDate;
 	}
+}
+
+function getStatusCuti($status)  {
+	switch ($status) {
+		case 'PEND0':
+			$flag_status = '<span class="px-2.5 py-0.5 inline-block text-xs font-medium rounded border bg-orange-100 border-orange-100 text-orange-500 dark:bg-orange-400/20 dark:border-transparent">Pending  -  Menunggu ACC Pengganti</span>';
+			break;
+		case 'PEND1':
+			$flag_status = '<span class="px-2.5 py-0.5 inline-block text-xs font-medium rounded border bg-purple-100 border-purple-100 text-purple-500 dark:bg-purple-400/20 dark:border-transparent">Pend - ACC Kapuskel</span>';
+			break;
+		case 'PEND2':
+			$flag_status = '<span class="px-2.5 py-0.5 inline-block text-xs font-medium rounded border bg-yellow-100 border-yellow-100 text-yellow-500 dark:bg-yellow-400/20 dark:border-transparent">Pending -  Menunggu ACC Kasubbag TU</span>';
+			break;
+		case 'PEND3':
+			$flag_status = '<span class="badge bg-success-subtle text-success fs-sm">Pend -  ACC Kapus Kecamatan</span>';
+			break;
+		case 'APPROVE':
+			$flag_status = '<span class="px-2.5 py-0.5 inline-block text-xs font-medium rounded border bg-green-100 border-green-100 text-green-500 dark:bg-green-400/20 dark:border-transparent">Disetujui</span>';
+			break;
+		case 'REJECT':
+			$flag_status = '<span class="px-2.5 py-0.5 inline-block text-xs font-medium rounded border bg-red-100 border-orange-100 text-orange-500 dark:bg-orange-400/20 dark:border-transparent">Ditolak</span>';
+			break;
+		case 'CANCEL':
+			$flag_status = '<span class="px-2.5 py-0.5 inline-block text-xs font-medium rounded border bg-red-100 border-red-100 text-red-500 dark:bg-red-400/20 dark:border-transparent">Dibatalkan</span>';
+			break;
+			
+		default:
+			$flag_status = '<span class="badge bg-warning fs-sm">Ditangguhkan</span>';
+	}
+
+	return $flag_status;
+}
+/*\
+	PENDING      				 - PEND0       -> Belum di ACC Pengganti
+	PENDING KAPUSKEL/KASATPEL    - PEND1
+	PENDING KTU					 - PEND2
+	PENDING KAPUSKEL             - PEND3
+	
+
+	DISETUJUI    				 - APPROVED   -> Sudah disetujui kapuskec
+	DiTOLAK      				 - REJECT     -> ditolak
+	DIBATALKAN   				 - CANCEL     -> 
+	DITANGGUHKAN 				 - HOLD
+
+
+
+*/
+
+
+function getJamKerjaPegawai($hari)
+{
+
+	if ($hari == 'Minggu' || $hari == 'Sabtu') {
+		$bg = '#fef5f5; color:#b33030';
+		$jamMasuk = '';
+		$jamPulang = '';
+		$weekday = true;
+	} else if ($hari == 'Jumat') {
+		$bg = '#FFF';
+		$jamMasuk = '07:30:00';
+		$jamPulang = '16:30:00';
+		$weekday = false;
+	} else {
+		$bg = '#FFF';
+		$jamMasuk = '07:30:00';
+		$jamPulang = '16:00:00';
+		$weekday = false;
+	}
+
+
+	$newArray = array(
+		'bg' => $bg,
+		'jam_masuk' => $jamMasuk,
+		'jam_pulang' => $jamPulang,
+		'weekday' => $weekday
+
+	);
+
+	return $newArray;
 }
 
 if (!function_exists('changeFormatDate')) {
@@ -499,18 +1104,138 @@ function hitungMasaKerja($date1, $date2)
 }
 
 
+	function kelompok_masa_kerja($tgl_masuk, $tgl_hitung = null) {
+		// Jika tanggal perhitungan tidak diberikan, pakai hari ini
+		$tgl_hitung = $tgl_hitung ? new DateTime($tgl_hitung) : new DateTime();
+		$tgl_masuk = new DateTime($tgl_masuk);
 
-function arrayKategori()
-{
-	$kategori = array('Alkes', 'Obat', 'Vaksin', 'Cetakan', 'Kebersihan', 'Alat Rumah Tangga', 'ATK', 'Alat Elektronik', 'Lain-lain');
-	return $kategori;
+		// Hitung selisih dalam tahun dan bulan
+		$interval = $tgl_masuk->diff($tgl_hitung);
+		$total_tahun = $interval->y;
+		$total_bulan = $interval->m;
+
+		// Hitung total masa kerja dalam tahun desimal (misal: 9.83 tahun)
+		$masa_kerja = $total_tahun + ($total_bulan / 12);
+
+		// Loop interval 2 tahun dari 0-2 sampai 22-24
+		for ($i = 0; $i <= 22; $i += 2) {
+			$batas_atas = $i + 2;
+
+			if ($masa_kerja >= $i && $masa_kerja < $batas_atas) {
+				return "$i-$batas_atas";
+			}
+		}
+
+		// Jika masa kerja lebih dari 24 tahun, bisa kembalikan "24+"
+		return "24+";
+	}
+
+     function get_id_by_masakerja($masa_kerja)
+    {
+        switch ($masa_kerja) {
+            case "0-2": $id = 1; break;
+            case "2-4": $id = 2; break;
+            case "4-6": $id = 3; break;
+            case "6-8": $id = 4; break;
+            case "8-10": $id = 6; break;
+            case "10-12": $id = 7; break;
+            case "12-14": $id = 8; break;
+            case "14-16": $id = 9; break;
+            case "16-18": $id = 10; break;
+            case "18-20": $id = 11; break;
+            default: $id = null; break;
+        }
+
+      return $id;
+    }
+
+
+
+
+
+function getListJnsDiklat(){
+	
+	$jns = 'SEMINAR/
+	WORKSHOP/
+	SOSIALISASI/
+	KURSUS/
+	PENATARAN/
+	BIMTEK/
+	STRUKTURAL/
+	MANAJERIAL/
+	FUNGSIONAL/
+	JARAK JAUH/
+	COACHING/
+	MENTORING/
+	E-LEARNING/
+	BELAJAR MANDIRI/
+	PATOK BANDING';
+
+	$arayJenis = explode("/", $jns);
+
+	return $arayJenis;
 }
 
-function arrayBagian()
+
+function tanggalCuti($tgl_dari, $tgl_sampai)
 {
-	$bagian  = array('Mutu', 'TB-MH', 'Farmasi', 'Alkes', 'UKP', 'UKM','Admen','Admin Pustu', 'Gizi', 'Lain');
-	return $bagian;
+	$bulan1 = date('m', strtotime($tgl_dari));
+	$bulan2 = date('m', strtotime($tgl_sampai));
+
+	$tgl1 = date('d', strtotime($tgl_dari));
+	$tgl2 = date('d', strtotime($tgl_sampai));
+
+	$tahun1 = date('Y', strtotime($tgl_dari));
+	$tahun2 = date('Y', strtotime($tgl_sampai));
+
+
+	$nama_bulan = getNamaBulan($bulan1);
+	$nama_bulan2 = getNamaBulan($bulan2);
+
+	if ($bulan1 == $bulan2) {
+		$tgl_cuti = $tgl1 . '-' . $tgl2 . ' ' . $nama_bulan . ' ' . $tahun1;
+		if ($tgl_dari == $tgl_sampai) {
+			$tgl_cuti = $tgl1 . ' ' . $nama_bulan . ' ' . $tahun1;
+		}
+	} else {
+
+		$tgl_cuti = $tgl1 . ' ' . $nama_bulan . ' ' . $tahun1 . ' s/d ' . $tgl2 . ' ' . $nama_bulan2 . ' ' . $tahun2;
+	}
+
+
+	return $tgl_cuti;
 }
+
+function arrayPendidikan()
+{
+	$arrayPendididkan = array('Belum/Tidak Bersekolah', 'Lulus SD', 'Lulus SMP', 'Lulus SLTA', 'Lulus Perguruan Tinggi');
+	return $arrayPendididkan;
+}
+
+function createClassBadge($flag){
+
+	switch ($flag) {
+		case 'success':
+			$badge = 'px-2.5 py-0.5 text-xs font-medium inline-block rounded border transition-all duration-200 ease-linear bg-green-100 border-transparent text-green-500 hover:bg-green-200 dark:bg-green-400/20 dark:hover:bg-green-400/30 dark:border-transparent';
+			break;
+		case 'info':
+			$badge = 'px-2.5 py-0.5 text-xs font-medium inline-block rounded border transition-all duration-200 ease-linear bg-custom-100 border-transparent text-custom-500 hover:bg-custom-200 dark:bg-custom-400/20 dark:hover:bg-custom-400/30 dark:border-transparent';
+			break;
+		case 'warning':
+			$badge = 'px-2.5 py-0.5 text-xs font-medium inline-block rounded border transition-all duration-200 ease-linear bg-orange-100 border-transparent text-orange-500 hover:bg-orange-200 dark:bg-orange-400/20 dark:hover:bg-orange-400/30 dark:border-transparent';
+			break;
+		case 'danger':
+			$badge = 'px-2.5 py-0.5 text-xs font-medium inline-block rounded border transition-all duration-200 ease-linear bg-red-100 border-transparent text-red-500 hover:bg-red-200 dark:bg-red-400/20 dark:hover:bg-red-400/30 dark:border-transparent';
+			break;
+		default:
+		$badge = 'px-2.5 py-0.5 text-xs font-medium inline-block rounded border transition-all duration-200 ease-linear bg-yellow-100 border-transparent text-yellow-500 hover:bg-yellow-200 dark:bg-yellow-400/20 dark:hover:bg-yellow-400/30 dark:border-transparent';
+			break;
+	}
+
+	return $badge;
+	
+}
+
 
 function arrayUsergroup(){
 	$arrayUG = array('Superadmin', 'Kapuskec', 'Kasubbag TU', 'Kapuskel', 'Kasatpel', ' Admin', 'User', 'Penanggung Jawab');
@@ -518,10 +1243,34 @@ function arrayUsergroup(){
 
 }
 
-function masterDisposisi(){
-	$arrayUG = array('Pj.Barang', 'Pj.Alkes', 'Pj.TB', 'Pj.ART', 'Pj.HIV','Pj.Kesling', 'Pj.BMHP', 'Pj.Mutu', 'Pj.ATK', 'Pj.KIA', 'Pj.Farmasi', ' Pj.Alkes', 'Pj.BMHP', 'Pj.Diklat', 'Pj.Vaksin',  'Pj.IT','Kepegawaian', 'Keuangan', 'UKP', 'PPK', 'UKM', 'Bendahara', 'Perencanaan', 'Ka.Sub.bag.TU');
-	return $arrayUG;
+function formatTanggalIndonesia($tanggal) {
+    // Create an array for month names in Indonesian
+    $bulan = [
+        1 => 'Januari',
+        2 => 'Februari',
+        3 => 'Maret',
+        4 => 'April',
+        5 => 'Mei',
+        6 => 'Juni',
+        7 => 'Juli',
+        8 => 'Agustus',
+        9 => 'September',
+        10 => 'Oktober',
+        11 => 'November',
+        12 => 'Desember'
+    ];
 
+    // Create a DateTime object from the input date
+    $date = new DateTime($tanggal);
+    
+    // Extract day, month, and year
+    $day = $date->format('d');
+    $month = (int)$date->format('m');
+    $year = $date->format('Y');
+    
+    // Return formatted date
+   // return $day . ' ' . $bulan[$month] . ' ' . $year;
+   return  $bulan[$month] . ' ' . $year;
 }
 
 
@@ -529,7 +1278,7 @@ function createMessageInfo($msg, $alert_type='success'){
 
 
 	if($alert_type=='success'){
-		$mssage = '<div class="alert bg-success-subtle text-success alert-dismissible bg-success border-0 fade show" role="alert">
+		$mssage = '<div class="alert bg-success-subtle text-white alert-dismissible bg-success border-0 fade show" role="alert">
 			<button type="button" class="btn-close btn-close-success" data-bs-dismiss="alert" aria-label="Close"></button>
 			<strong>Success! </strong> '.$msg.'
 		</div>';
@@ -696,6 +1445,24 @@ if (!function_exists('getNamaBulan')) {
 }
 
 
+
+
+function getJenisCuti($id)
+{
+	if ($id == 1) {
+		$cuti = 'Cuti Tahunan';
+	} else if ($id == 2) {
+		$cuti = 'Cuti Sakit';
+	} else if ($id == 3) {
+		$cuti = 'Cuti Karena Alasan Penting';
+	} else if ($id == 4) {
+		$cuti = 'Cuti Besar';
+	} else {
+		$cuti = 'Cuti Melahirkan';
+	}
+
+	return $cuti;
+}
 function getHariTerakhir($bulan)
 {
 	if ($bulan == 2) {
@@ -708,6 +1475,117 @@ function getHariTerakhir($bulan)
 
 	return $numDays;
 }
+function getJenisAbsensi($jns_absensi, $id_absen_dl, $keterangan)
+{
+	if ($jns_absensi == 1) {
+		//DL-AWAL
+
+		$data = array(
+			'absen_masuk'  => 'DL-AWAL',
+			'id_absen_dl'  => $id_absen_dl,
+			'keterangan'   => $keterangan,
+			'terlambat' => 0
+		);
+	} elseif ($jns_absensi == 2) {
+		//DL-AKHIR
+		$data = array(
+			'absen_keluar'  => 'DL-AKHIR',
+			'id_absen_dl'  => $id_absen_dl,
+			'keterangan'   => $keterangan,
+			'pulang_cepat' => 0
+		);
+	} elseif ($jns_absensi == 3) {
+		//DL-PENUH
+		$data = array(
+			'absen_masuk'  => 'DL-PENUH',
+			'absen_keluar' => 'DL-PENUH',
+			'id_absen_dl'  => $id_absen_dl,
+			'keterangan'   => $keterangan,
+			'terlambat' => 0
+		);
+	} elseif ($jns_absensi == 4) {
+		//CUTI
+		$data = array(
+			'absen_masuk'  => 'CUTI',
+			'absen_keluar' => 'CUTI',
+			'id_absen_dl'  => $id_absen_dl,
+			'keterangan'   => $keterangan,
+			'terlambat' => 0
+		);
+	} else if ($jns_absensi == 5) {
+		//SAKIT
+		$data = array(
+			'absen_masuk'  => 'SAKIT',
+			'absen_keluar' => 'SAKIT',
+			'id_absen_dl'  => $id_absen_dl,
+			'keterangan'   => $keterangan,
+			'terlambat' => 0
+		);
+	} else if ($jns_absensi == 6) {
+		//IZIN
+		$data = array(
+			'absen_masuk'  => 'IZIN',
+			'absen_keluar' => 'IZIN',
+			'id_absen_dl'  => $id_absen_dl,
+			'keterangan'   => $keterangan,
+			'terlambat' => 0
+		);
+	} else if ($jns_absensi == 7) {
+		//WFH
+		$data = array(
+			'absen_masuk'  => 'WFH',
+			'absen_keluar' => 'WFH',
+			'id_absen_dl'  => 0,
+			'keterangan'   => $keterangan,
+			'terlambat' => 0,
+			'pulang_cepat' => 0
+		);
+	} else if ($jns_absensi == 8) {
+		//ODP
+		$data = array(
+			'absen_masuk'  => 'ISOLASI MANDIRI',
+			'absen_keluar' => 'ISOLASI MANDIRI',
+			'id_absen_dl'  => 0,
+			'keterangan'   => $keterangan,
+			'terlambat' => 0
+		);
+	} else {
+		//ALPHA
+		$data = array(
+			'absen_masuk'  => 'ALPHA',
+			'absen_keluar' => 'ALPHA',
+			'id_absen_dl'  => 0,
+			'keterangan'   => $keterangan,
+			'terlambat' => 0
+		);
+	}
+
+	return $data;
+}
+function getJnsDl($id)
+{
+	if ($id == 1) {
+		$cuti = 'DL-AWAL';
+	} else if ($id == 2) {
+		$cuti = 'DL-AKHIR';
+	} else if ($id == 3) {
+		$cuti = 'DL-PENUH';
+	} else if ($id == 4) {
+		$cuti = 'CUTI';
+	} else if ($id == 5) {
+		$cuti = 'SAKIT';
+	} else if ($id == 6) {
+		$cuti = 'IZIN';
+	} else if ($id == 7) {
+		$cuti = 'WFH';
+	} else if ($id == 8) {
+		$cuti = 'ISOLASI MANDIRI';
+	} else {
+		$cuti = 'ALPHA';
+	}
+
+	return $cuti;
+}
 function getWaktu()
 {
 
@@ -718,6 +1596,16 @@ function getWaktu()
 	return $waktu;
 }
 
+/*	function getWaktu()
+	{
+
+		$waktu = array('00:00', '00:30', '01:00', '01:30', '02:00', '02:30', '03:00', '03:30', '04:00', '04:30', '05:00', '05:30', '06:00', '06:30', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30','10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30','20:00', '20:30', '21:00', '21:30', '22:00', '22:30', '23:00', '23:30') ;
+
+
+
+		return $waktu ;
+
+	}*/
 function format_db2($date)
 {
 	$expl = explode("/", $date);
@@ -742,6 +1630,7 @@ function format_db3($date)
 }
 function rupiah($val)
 {
+
 	$return = str_replace(',', '.', number_format($val));
 	return $return;
 }
@@ -815,6 +1704,72 @@ function getHourDifference($startHour, $endHour, $case='telat') {
 }
 
 
+
+function getPoinPerilaku($value = '')
+{
+	switch ($value) {
+		case 1:
+			$newPoin = 10;
+			break;
+		case 2:
+			$newPoin = 9;
+			break;
+		case 3:
+			$newPoin = 8;
+			break;
+		case 4:
+			$newPoin = 7;
+			break;
+		case 5:
+			$newPoin = 6;
+			break;
+		case 6:
+			$newPoin = 5;
+			break;
+		case 7:
+			$newPoin = 4;
+			break;
+		case 8:
+			$newPoin = 3;
+			break;
+		case 9:
+			$newPoin = 2;
+			break;
+		case 10:
+			$newPoin = 1;
+			break;
+	}
+
+
+	return $newPoin;
+}
+
+function nilaiJenisItem2($val)
+{
+	$nilai = $val - 11;
+	$newVal = str_replace("-", "", $nilai);
+
+	return $newVal;
+}
+function getJnsAbsensi($jns)
+{
+
+	if ($jns == 1) {
+		$cuti = 'DL-AWAL';
+	} else if ($jns == 2) {
+		$cuti = 'DL-AKHIR';
+	} else if ($jns == 3) {
+		$cuti = 'DL-PENUH';
+	} else if ($jns == 4) {
+		$cuti = 'CUTI';
+	} else if ($jns == 5) {
+		$cuti = 'SAKIT';
+	} else {
+		$cuti = 'IZIN';
+	}
+
+	return $cuti;
+}
 function word_format($string)
 {
 	$newFormat = strtolower($string);
@@ -832,6 +1787,38 @@ if (!function_exists('umurbulan')) {
 		$bulan = ($years * 12) + $months;
 		return $bulan;
 	}
+}
+// if (!function_exists('hitungMasaKerja')) {
+// 	function hitungMasaKerja($date2, $date1)
+// 	{
+// 		$diff = abs(strtotime($date2) - strtotime($date1));
+// 		$years = floor($diff / (365 * 60 * 60 * 24));
+// 		$months = floor(($diff - $years * 365 * 60 * 60 * 24) / (30 * 60 * 60 * 24));
+// 		$days = floor(($diff - $years * 365 * 60 * 60 * 24 - $months * 30 * 60 * 60 * 24) / (60 * 60 * 24));
+// 		$array = array(
+// 			'tahun' => $years,
+// 			'bulan' => $months,
+// 			'hari' => $days,
+// 		);
+// 		return $array;
+// 	}
+// }
+function cekMasaKerja($tahun, $bulan, $hari)
+{
+	$naik = false;
+	if ($tahun % 2 == 0 && $tahun > 1) {
+		//klo angkanya genap
+		if ($bulan == 0) {
+			if ($hari == 0) {
+				$naik = false; // ga naik
+			} else {
+				$naik = true; // naik gaji
+			}
+		} else {
+			$naik = true; // naik gaji
+		}
+	}
+	return $naik;
 }
 function getBulan($bulan)
 {
